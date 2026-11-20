@@ -59,6 +59,12 @@ export async function searchProperties(query, viewer) {
 
   if (query.propertyType) match.propertyType = query.propertyType;
   if (query.furnishing) match.furnishing = query.furnishing;
+  if (query.minRent !== undefined || query.maxRent !== undefined) {
+    match.rent = {};
+    if (query.minRent !== undefined) match.rent.$gte = query.minRent;
+    if (query.maxRent !== undefined) match.rent.$lte = query.maxRent;
+  }
+  for (const key of query.amenities || []) match[`amenities.${key}`] = true;
 
   if (hasGeo) {
     const radiusKm = query.radius || 10;
@@ -89,6 +95,7 @@ export async function searchProperties(query, viewer) {
           },
         },
         { $unwind: { path: "$owner", preserveNullAndEmptyArrays: true } },
+        { $project: { "owner.password": 0, "owner.email": 0, "owner.phone": 0 } },
       ]),
     ]);
 

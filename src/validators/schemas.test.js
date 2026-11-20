@@ -60,3 +60,23 @@ test("search requires both coordinates together", () => {
   assert.equal(ok.data.query.radius, 10);
   assert.equal(ok.data.query.furnishing, undefined);
 });
+
+import { passwordSchema, searchQuerySchema as _search } from "./schemas.js";
+
+test("search accepts rent range and amenity filters", () => {
+  const ok = _search.safeParse({ query: { minRent: "5000", maxRent: "20000", amenities: "wifi,parking" } });
+  assert.equal(ok.success, true);
+  assert.deepEqual(ok.data.query.amenities, ["wifi", "parking"]);
+  assert.equal(ok.data.query.minRent, 5000);
+});
+
+test("search rejects inverted rent range and unknown amenities", () => {
+  assert.equal(_search.safeParse({ query: { minRent: "30000", maxRent: "1000" } }).success, false);
+  assert.equal(_search.safeParse({ query: { amenities: "jacuzzi" } }).success, false);
+});
+
+test("password change must differ and be strong", () => {
+  assert.equal(passwordSchema.safeParse({ body: { currentPassword: "Password123", newPassword: "Password123" } }).success, false);
+  assert.equal(passwordSchema.safeParse({ body: { currentPassword: "Password123", newPassword: "short1" } }).success, false);
+  assert.equal(passwordSchema.safeParse({ body: { currentPassword: "Password123", newPassword: "NewPassword456" } }).success, true);
+});

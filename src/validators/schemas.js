@@ -59,6 +59,24 @@ export const profileSchema = z.object({
     }),
 });
 
+export const passwordSchema = z.object({
+  body: z
+    .object({
+      currentPassword: z.string().min(1, "Current password is required"),
+      newPassword: z
+        .string()
+        .min(8, "Password must be at least 8 characters")
+        .max(72, "Password must be at most 72 characters")
+        .regex(/[A-Za-z]/, "Password must include a letter")
+        .regex(/[0-9]/, "Password must include a number"),
+    })
+    .superRefine((value, ctx) => {
+      if (value.currentPassword === value.newPassword) {
+        ctx.addIssue({ code: "custom", path: ["newPassword"], message: "New password must be different" });
+      }
+    }),
+});
+
 const amenitySchema = z
   .object(Object.fromEntries(AMENITY_KEYS.map((key) => [key, z.boolean().optional()])))
   .partial();
@@ -123,9 +141,23 @@ export const searchQuerySchema = z
       page: z.preprocess(emptyToUndefined, z.coerce.number().int().min(1).optional()),
       limit: z.preprocess(emptyToUndefined, z.coerce.number().int().min(1).max(24).optional()),
       sort: z.preprocess(emptyToUndefined, z.enum(["newest", "rent_asc", "rent_desc", "distance"]).optional()),
+      minRent: z.preprocess(emptyToUndefined, z.coerce.number().min(0).optional()),
+      maxRent: z.preprocess(emptyToUndefined, z.coerce.number().min(0).optional()),
+      amenities: z.preprocess(
+        emptyToUndefined,
+        z
+          .string()
+          .transform((value) => value.split(",").map((item) => item.trim()).filter(Boolean))
+          .pipe(z.array(z.enum(AMENITY_KEYS, { errorMap: () => ({ message: "Unknown amenity filter" }) })).max(AMENITY_KEYS.length))
+          .optional()
+      ),
     }),
   })
   .superRefine((value, ctx) => {
+    const { minRent, maxRent } = value.query;
+    if (minRent !== undefined && maxRent !== undefined && minRent > maxRent) {
+      ctx.addIssue({ code: "custom", path: ["query", "minRent"], message: "Minimum rent cannot exceed maximum rent" });
+    }
     const hasLat = value.query.lat !== undefined;
     const hasLng = value.query.lng !== undefined;
     if (hasLat !== hasLng) {

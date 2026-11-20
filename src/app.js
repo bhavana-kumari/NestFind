@@ -3,6 +3,7 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import helmet from "helmet";
+import mongoose from "mongoose";
 import authRoutes from "./routes/authRoutes.js";
 import enquiryRoutes from "./routes/enquiryRoutes.js";
 import favoriteRoutes from "./routes/favoriteRoutes.js";
@@ -16,6 +17,7 @@ import { uploadProvider } from "./services/uploadService.js";
 import { uploadDir } from "./utils/photos.js";
 
 const app = express();
+if (process.env.TRUST_PROXY) app.set("trust proxy", Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
 const origins = (process.env.CLIENT_URL || "http://localhost:5173")
   .split(",")
   .map((origin) => origin.trim())
@@ -33,10 +35,12 @@ app.use(sanitizeRequest);
 app.use("/uploads", express.static(path.resolve(uploadDir())));
 
 app.get("/api/health", (_req, res) => {
-  res.json({
-    success: true,
+  const dbUp = mongoose.connection.readyState === 1;
+  res.status(dbUp ? 200 : 503).json({
+    success: dbUp,
     data: {
-      status: "ok",
+      status: dbUp ? "ok" : "degraded",
+      database: dbUp ? "connected" : "disconnected",
       uploadProvider: uploadProvider(),
       geocodingProvider: process.env.GEOCODING_PROVIDER || "nominatim",
     },
