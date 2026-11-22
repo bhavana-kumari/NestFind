@@ -5,6 +5,26 @@ import { AppError } from "../utils/AppError.js";
 import { presentProperty } from "../utils/presentProperty.js";
 import { assertPhotos } from "../utils/photos.js";
 import { deleteImage } from "./uploadService.js";
+import { propertySearchCache } from "./cacheService.js";
+
+function stableSerialize(value) {
+  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableSerialize(value[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function cloneCachedValue(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function searchCacheKey(query) {
+  return `properties:${stableSerialize(query)}`;
+}
 
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -50,6 +70,13 @@ function applyableBody(body) {
 }
 
 export async function searchProperties(query, viewer) {
+  const cacheable = !viewer;
+  const cacheKey = cacheable ? searchCacheKey(query) : undefined;
+  if (cacheable) {
+    const cached = propertySearchCache.get(cacheKey);
+    if (cached) return cloneCachedValue(cached);
+  }
+
   const page = query.page || 1;
   const limit = query.limit || 12;
   const skip = (page - 1) * limit;
@@ -101,7 +128,7 @@ export async function searchProperties(query, viewer) {
 
     const total = countRows[0]?.total || 0;
     const presented = rows.map((row) => presentProperty(row, viewer));
-    return {
+    const result = {
       properties: await attachFavorites(presented, viewer),
       page,
       limit,
@@ -109,6 +136,8 @@ export async function searchProperties(query, viewer) {
       totalPages: total ? Math.ceil(total / limit) : 0,
       radiusKm,
     };
+    if (cacheable) propertySearchCache.set(cacheKey, result);
+    return result;
   }
 
   if (query.location) {
@@ -129,13 +158,15 @@ export async function searchProperties(query, viewer) {
   ]);
 
   const presented = docs.map((doc) => presentProperty(doc, viewer));
-  return {
+  const result = {
     properties: await attachFavorites(presented, viewer),
     page,
     limit,
     total,
     totalPages: total ? Math.ceil(total / limit) : 0,
   };
+  if (cacheable) propertySearchCache.set(cacheKey, result);
+  return result;
 }
 
 export async function getPropertyById(id, viewer) {
@@ -153,6 +184,7 @@ export async function createProperty(ownerId, body) {
     availabilityStatus: "available",
   });
   await property.populate("owner", "name role createdAt");
+  propertySearchCache.clear();
   return presentProperty(property, { _id: ownerId, role: "owner" });
 }
 
@@ -177,6 +209,7 @@ export async function updateProperty(id, ownerId, body) {
   await Promise.all(previous.filter((photo) => !nextIds.has(photo.publicId)).map((photo) => deleteImage(photo)));
 
   await property.populate("owner", "name role createdAt");
+  propertySearchCache.clear();
   return presentProperty(property, { _id: ownerId, role: "owner" });
 }
 
@@ -185,6 +218,7 @@ export async function deleteProperty(id, ownerId) {
   const photos = property.photos.map((photo) => ({ ...photo.toObject() }));
   await property.deleteOne();
   await Promise.all(photos.map((photo) => deleteImage(photo)));
+  propertySearchCache.clear();
 }
 
 export async function updatePropertyStatus(id, ownerId, availabilityStatus) {
@@ -192,6 +226,7 @@ export async function updatePropertyStatus(id, ownerId, availabilityStatus) {
   property.availabilityStatus = availabilityStatus;
   await property.save();
   await property.populate("owner", "name role createdAt");
+  propertySearchCache.clear();
   return presentProperty(property, { _id: ownerId, role: "owner" });
 }
 

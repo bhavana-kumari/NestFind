@@ -7,7 +7,7 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "seed": "node src/seed.js",
-    "test": "node --test src/utils/presentProperty.test.js src/validators/schemas.test.js",
+    "test": "node --test src/utils/presentProperty.test.js src/validators/schemas.test.js src/services/cacheService.test.js",
     "lint:syntax": "node --check src/server.js"
   },
   "dependencies": {
