@@ -15,6 +15,7 @@ import { errorHandler, notFound, sanitizeRequest } from "./middleware/errorMiddl
 import { apiLimiter } from "./middleware/rateLimit.js";
 import { uploadProvider } from "./services/uploadService.js";
 import { uploadDir } from "./utils/photos.js";
+import { propertySearchCache } from "./services/cacheService.js";
 
 const app = express();
 if (process.env.TRUST_PROXY) app.set("trust proxy", Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
@@ -43,6 +44,7 @@ app.get("/api/health", (_req, res) => {
       database: dbUp ? "connected" : "disconnected",
       uploadProvider: uploadProvider(),
       geocodingProvider: process.env.GEOCODING_PROVIDER || "nominatim",
+      propertySearchCache: propertySearchCache.stats(),
     },
   });
 });
